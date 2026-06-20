@@ -21,6 +21,7 @@ A Python + SQLite tool that compares grocery prices across Coles, Woolworths, an
 - `grocery-optimizer/init_db.py` — entry point: drops + recreates DB, runs schema + seed
 - `grocery-optimizer/schema.py` — `CREATE TABLE` statements for all three tables
 - `grocery-optimizer/seed.py` — mock data insertion; `calc_unit_price_per_100()` auto-calculates the unit price before every insert
+- `grocery-optimizer/optimizer.py` — split-list optimizer with raw and advanced (Inconvenience Tax) modes
 
 ## Architecture decisions
 
@@ -28,12 +29,16 @@ A Python + SQLite tool that compares grocery prices across Coles, Woolworths, an
 - Package sizes are stored as plain numerics (e.g. `250`, `2000`) with a separate `unit_type` column (`g`, `ml`, etc.) so the normalisation formula stays unit-agnostic.
 - `is_on_special` and `is_staple` are stored as `INTEGER` (0/1) — SQLite has no native BOOLEAN, and this keeps queries straightforward.
 - `shopping_list.assigned_store` and `preference_tier` are nullable — `NULL` means "let the optimizer decide."
+- The optimizer re-evaluates each item after a store consolidation, respecting `preference_tier` and `assigned_store` constraints.
 
 ## Product
 
 - Compare the per-100-unit price of any grocery item across Coles, Woolworths, and Aldi.
 - Track specials (`is_on_special`) and flag staple items (`is_staple`).
 - Manage a weekly shopping list with per-item store assignments and brand-tier preferences.
+- Run the optimizer to split your shopping list into store-specific lists.
+- Toggle the Inconvenience Tax to consolidate tiny savings into one trip.
+- Filter stores with `--stores` — simulate only shopping at Coles and Aldi, for example.
 
 ## User preferences
 

@@ -87,23 +87,21 @@ def run_seed(conn: sqlite3.Connection) -> None:
     mp_coffee_id = insert_master_product(cur, "Instant Coffee", "Coffee & Tea", is_staple=False)
 
     # ------------------------------------------------------------------
-    # 2. STORE PRODUCTS — Strawberry Jam
+    # 2. STORE PRODUCTS — Strawberry Jam (all 500g for fair comparison)
     # ------------------------------------------------------------------
-    # Coles: IXL 250g
     insert_store_product(
         cur,
         master_product_id=mp_jam_id,
         store_name="Coles",
-        product_name="IXL Strawberry Jam 250g",
+        product_name="IXL Strawberry Jam 500g",
         brand_tier="standard",
-        price=3.20,
+        price=5.50,
         is_on_special=False,
-        package_size=250,
+        package_size=500,
         unit_type="g",
-        deep_link_url="https://www.coles.com.au/search?q=IXL+strawberry+jam+250g",
+        deep_link_url="https://www.coles.com.au/search?q=IXL+strawberry+jam+500g",
     )
 
-    # Woolworths: Bonne Maman 500g
     insert_store_product(
         cur,
         master_product_id=mp_jam_id,
@@ -117,14 +115,13 @@ def run_seed(conn: sqlite3.Connection) -> None:
         deep_link_url="https://www.woolworths.com.au/shop/search/products?searchTerm=bonne+maman+strawberry+jam+500g",
     )
 
-    # Aldi: Grandessa 500g
     insert_store_product(
         cur,
         master_product_id=mp_jam_id,
         store_name="Aldi",
         product_name="Grandessa Strawberry Jam 500g",
         brand_tier="budget",
-        price=2.49,
+        price=5.30,
         is_on_special=False,
         package_size=500,
         unit_type="g",
@@ -174,9 +171,8 @@ def run_seed(conn: sqlite3.Connection) -> None:
     )
 
     # ------------------------------------------------------------------
-    # 4. STORE PRODUCTS — Moccona Coffee 200g (Coles 50% off special)
+    # 4. STORE PRODUCTS — Moccona Coffee 200g
     # ------------------------------------------------------------------
-    # Regular price $18.00, 50% off = $9.00
     regular_price = 18.00
     special_price = round(regular_price * 0.50, 2)
 
@@ -193,17 +189,135 @@ def run_seed(conn: sqlite3.Connection) -> None:
         deep_link_url="https://www.coles.com.au/search?q=moccona+coffee+200g",
     )
 
+    insert_store_product(
+        cur,
+        master_product_id=mp_coffee_id,
+        store_name="Woolworths",
+        product_name="Moccona Classic Dark Roast Instant Coffee 200g",
+        brand_tier="premium",
+        price=18.00,
+        is_on_special=False,
+        package_size=200,
+        unit_type="g",
+        deep_link_url="https://www.woolworths.com.au/shop/search/products?searchTerm=moccona+coffee+200g",
+    )
+
+    insert_store_product(
+        cur,
+        master_product_id=mp_coffee_id,
+        store_name="Aldi",
+        product_name="Alcafe Gold Roast Instant Coffee 200g",
+        brand_tier="budget",
+        price=12.00,
+        is_on_special=False,
+        package_size=200,
+        unit_type="g",
+        deep_link_url="https://www.aldi.com.au/en/grocery-specialbuys/search/?query=alcafe+coffee+200g",
+    )
+
     # ------------------------------------------------------------------
-    # 5. SHOPPING LIST — add one entry per master product
+    # 5. MORE MASTER PRODUCTS for a richer demo
     # ------------------------------------------------------------------
-    # Jam: no strong preference, let the optimizer decide
+    mp_vegemite_id = insert_master_product(cur, "Vegemite 380g", "Condiments & Spreads", is_staple=True)
+    mp_timtams_id = insert_master_product(cur, "Tim Tams 200g", "Biscuits & Snacks", is_staple=False)
+
+    # ------------------------------------------------------------------
+    # 6. STORE PRODUCTS — Vegemite (Coles on special)
+    # ------------------------------------------------------------------
+    insert_store_product(
+        cur,
+        master_product_id=mp_vegemite_id,
+        store_name="Coles",
+        product_name="Vegemite Spread 380g",
+        brand_tier="standard",
+        price=5.00,
+        is_on_special=True,
+        package_size=380,
+        unit_type="g",
+        deep_link_url="https://www.coles.com.au/search?q=vegemite+380g",
+    )
+
+    insert_store_product(
+        cur,
+        master_product_id=mp_vegemite_id,
+        store_name="Woolworths",
+        product_name="Vegemite Spread 380g",
+        brand_tier="standard",
+        price=7.00,
+        is_on_special=False,
+        package_size=380,
+        unit_type="g",
+        deep_link_url="https://www.woolworths.com.au/shop/search/products?searchTerm=vegemite+380g",
+    )
+
+    insert_store_product(
+        cur,
+        master_product_id=mp_vegemite_id,
+        store_name="Aldi",
+        product_name="Berg Spread 380g",
+        brand_tier="budget",
+        price=6.00,
+        is_on_special=False,
+        package_size=380,
+        unit_type="g",
+        deep_link_url="https://www.aldi.com.au/en/grocery-specialbuys/search/?query=berg+spread+380g",
+    )
+
+    # ------------------------------------------------------------------
+    # 7. STORE PRODUCTS — Tim Tams (Coles on special)
+    # ------------------------------------------------------------------
+    insert_store_product(
+        cur,
+        master_product_id=mp_timtams_id,
+        store_name="Coles",
+        product_name="Arnott's Tim Tam Original 200g",
+        brand_tier="standard",
+        price=2.50,
+        is_on_special=True,
+        package_size=200,
+        unit_type="g",
+        deep_link_url="https://www.coles.com.au/search?q=tim+tam+200g",
+    )
+
+    insert_store_product(
+        cur,
+        master_product_id=mp_timtams_id,
+        store_name="Woolworths",
+        product_name="Arnott's Tim Tam Original 200g",
+        brand_tier="standard",
+        price=4.50,
+        is_on_special=False,
+        package_size=200,
+        unit_type="g",
+        deep_link_url="https://www.woolworths.com.au/shop/search/products?searchTerm=tim+tam+200g",
+    )
+
+    insert_store_product(
+        cur,
+        master_product_id=mp_timtams_id,
+        store_name="Aldi",
+        product_name="Belmont Choc Biscuits 200g",
+        brand_tier="budget",
+        price=3.00,
+        is_on_special=False,
+        package_size=200,
+        unit_type="g",
+        deep_link_url="https://www.aldi.com.au/en/grocery-specialbuys/search/?query=choc+biscuits+200g",
+    )
+
+    # ------------------------------------------------------------------
+    # 8. SHOPPING LIST — add one entry per master product
+    # ------------------------------------------------------------------
+    # Jam: no strong preference
     insert_shopping_list_item(cur, master_product_id=mp_jam_id, preference_tier=None, quantity=1, assigned_store=None)
-
-    # Milk: budget tier, not yet assigned to a store
+    # Milk: budget tier
     insert_shopping_list_item(cur, master_product_id=mp_milk_id, preference_tier="budget", quantity=1, assigned_store=None)
-
     # Coffee: premium tier, already on special at Coles
     insert_shopping_list_item(cur, master_product_id=mp_coffee_id, preference_tier="premium", quantity=1, assigned_store="Coles")
+    # Vegemite: staple, no preference
+    insert_shopping_list_item(cur, master_product_id=mp_vegemite_id, preference_tier=None, quantity=1, assigned_store=None)
+    # Tim Tams: no preference
+    insert_shopping_list_item(cur, master_product_id=mp_timtams_id, preference_tier=None, quantity=1, assigned_store=None)
 
     conn.commit()
     print("Seed data inserted successfully.")
