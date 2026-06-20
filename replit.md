@@ -5,6 +5,8 @@ A Python + SQLite tool that compares grocery prices across Coles, Woolworths, an
 ## Run & Operate
 
 - `python3 grocery-optimizer/init_db.py` — wipe and re-initialise the database with seed data
+- `python3 grocery-optimizer/optimizer.py` — run the split-list optimizer in the terminal
+- `streamlit run grocery-optimizer/app.py --server.port 5000` — launch the interactive web UI
 - `pnpm run typecheck` — full typecheck across all Node packages
 - `pnpm run build` — typecheck + build all Node packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
