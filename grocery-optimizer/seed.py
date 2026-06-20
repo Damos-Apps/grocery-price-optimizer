@@ -306,7 +306,54 @@ def run_seed(conn: sqlite3.Connection) -> None:
     )
 
     # ------------------------------------------------------------------
-    # 8. SHOPPING LIST — add one entry per master product
+    # 8. EXTRA MASTER PRODUCT — for Smart Substitution demo
+    # ------------------------------------------------------------------
+    mp_cereal_id = insert_master_product(cur, "Corn Flakes 500g", "Breakfast Cereals", is_staple=True)
+
+    # Coles premium cereal
+    insert_store_product(
+        cur,
+        master_product_id=mp_cereal_id,
+        store_name="Coles",
+        product_name="Kellogg's Corn Flakes 500g",
+        brand_tier="premium",
+        price=6.50,
+        is_on_special=False,
+        package_size=500,
+        unit_type="g",
+        deep_link_url="https://www.coles.com.au/search?q=kelloggs+corn+flakes+500g",
+    )
+
+    # Woolworths premium cereal
+    insert_store_product(
+        cur,
+        master_product_id=mp_cereal_id,
+        store_name="Woolworths",
+        product_name="Kellogg's Corn Flakes 500g",
+        brand_tier="premium",
+        price=6.50,
+        is_on_special=False,
+        package_size=500,
+        unit_type="g",
+        deep_link_url="https://www.woolworths.com.au/shop/search/products?searchTerm=kelloggs+corn+flakes+500g",
+    )
+
+    # Aldi budget cereal
+    insert_store_product(
+        cur,
+        master_product_id=mp_cereal_id,
+        store_name="Aldi",
+        product_name="Harvest Morn Corn Flakes 500g",
+        brand_tier="budget",
+        price=2.50,
+        is_on_special=False,
+        package_size=500,
+        unit_type="g",
+        deep_link_url="https://www.aldi.com.au/en/grocery-specialbuys/search/?query=corn+flakes+500g",
+    )
+
+    # ------------------------------------------------------------------
+    # 9. SHOPPING LIST — add one entry per master product
     # ------------------------------------------------------------------
     # Jam: no strong preference
     insert_shopping_list_item(cur, master_product_id=mp_jam_id, preference_tier=None, quantity=1, assigned_store=None)
@@ -318,6 +365,8 @@ def run_seed(conn: sqlite3.Connection) -> None:
     insert_shopping_list_item(cur, master_product_id=mp_vegemite_id, preference_tier=None, quantity=1, assigned_store=None)
     # Tim Tams: no preference
     insert_shopping_list_item(cur, master_product_id=mp_timtams_id, preference_tier=None, quantity=1, assigned_store=None)
+    # Cereal: premium tier — this will trigger a smart substitution suggestion
+    insert_shopping_list_item(cur, master_product_id=mp_cereal_id, preference_tier="premium", quantity=1, assigned_store=None)
 
     conn.commit()
     print("Seed data inserted successfully.")
