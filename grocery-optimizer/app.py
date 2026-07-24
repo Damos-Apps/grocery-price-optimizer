@@ -576,8 +576,13 @@ with tab1:
 
                 with col3:
                     cart_url = _build_add_to_cart_url(sp.store_name, oi.name)
+                    target = {
+                        "Coles": "_coles",
+                        "Woolworths": "_woolies",
+                        "Aldi": "_doordash",
+                    }.get(sp.store_name, "_blank")
                     st.markdown(
-                        f'<a href="{cart_url}" target="_blank" style="display:inline-block;padding:6px 14px;background:#0073e6;color:white;border-radius:6px;text-decoration:none;font-weight:600;">Add to Cart</a>',
+                        f'<a href="{cart_url}" target="{target}" style="display:inline-block;padding:6px 14px;background:#0073e6;color:white;border-radius:6px;text-decoration:none;font-weight:600;">Add to Cart</a>',
                         unsafe_allow_html=True,
                     )
 
