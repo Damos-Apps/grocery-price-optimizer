@@ -1,42 +1,24 @@
 """
 sheets.py — Google Sheets integration for the grocery price optimizer.
 
-Reads a shopping list from a Google Sheet, matches the item names to the
-master products in the local SQLite database, and replaces the active
-shopping list with the matched items.
+Reads a shopping list from a public Google Sheet using the standard gviz CSV
+export endpoint (`/gviz/tq?tqx=out:csv`), matches the item names to the
+master products in the local SQLite database, and replaces the active shopping
+list with the matched items.
+
+This avoids Replit connectors and `st.connection` so it works anywhere,
+including Streamlit Cloud.
 """
 
-import os
 import re
 import sqlite3
 from difflib import get_close_matches
 from typing import List, Optional, Tuple
+from urllib.parse import urlparse, parse_qs
 
-import requests
+import pandas as pd
 
 ALL_STORES = ["Coles", "Woolworths", "Aldi"]
-
-CONNECTORS_HOSTNAME = os.environ.get("REPLIT_CONNECTORS_HOSTNAME", "connectors.replit.com")
-BASE_URL = f"https://{CONNECTORS_HOSTNAME}/api/v2/proxy"
-REPLIT_IDENTITY = os.environ.get("REPL_IDENTITY")
-
-
-def _connector_headers() -> dict:
-    if not REPLIT_IDENTITY:
-        raise RuntimeError("REPL_IDENTITY is not set; cannot call the Google Sheets connector.")
-    return {
-        "X-Replit-Token": f"repl {REPLIT_IDENTITY}",
-        "Connector-Name": "google-sheet",
-        "Accept": "application/json",
-    }
-
-
-def _connector_json(method: str, path: str, body: Optional[dict] = None) -> dict:
-    url = f"{BASE_URL}{path}"
-    headers = _connector_headers()
-    response = requests.request(method, url, headers=headers, json=body, timeout=30)
-    response.raise_for_status()
-    return response.json()
 
 
 def extract_spreadsheet_id(url: str) -> Optional[str]:
@@ -60,9 +42,39 @@ def extract_spreadsheet_id(url: str) -> Optional[str]:
     return None
 
 
+def extract_gid(url: str) -> Optional[str]:
+    """Extract the sheet gid parameter from a Google Sheets URL if present."""
+    if not url:
+        return None
+    parsed = urlparse(url)
+    query = parse_qs(parsed.fragment or parsed.query)
+    # gid is usually in the fragment (#gid=0) or query string
+    for key in ("gid",):
+        if key in query:
+            return query[key][0]
+    # Fallback: look for gid= anywhere in the URL string
+    match = re.search(r"[?#&]gid=(\d+)", url)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _build_export_url(spreadsheet_id: str, sheet_name: str, gid: Optional[str]) -> str:
+    """Build the public gviz CSV export URL for a Google Sheet."""
+    base = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/gviz/tq"
+    params = "tqx=out:csv"
+    if gid:
+        params += f"&gid={gid}"
+    elif sheet_name:
+        # URL-encode the sheet name to handle spaces and special characters.
+        from urllib.parse import quote
+        params += f"&sheet={quote(sheet_name)}"
+    return f"{base}?{params}"
+
+
 def _normalise(name: str) -> str:
     """Lowercase, strip, and collapse whitespace for fuzzy comparison."""
-    return re.sub(r"\s+", " ", name.strip().lower())
+    return re.sub(r"\s+", " ", str(name).strip().lower())
 
 
 def _find_column_index(header: List[str], preferred_name: str) -> Optional[int]:
@@ -109,14 +121,14 @@ def _parse_sheet_rows(
     # the item column name (or any sensible text). If the first row is all text,
     # treat it as a header.
     first_row = rows[0]
-    first_nonempty = [c for c in first_row if c.strip()]
+    first_nonempty = [c for c in first_row if str(c).strip()]
     looks_like_header = False
     if first_nonempty:
         preferred_norm = _normalise(item_column)
         header_norms = [_normalise(c) for c in first_nonempty]
         if any(preferred_norm in h or h in preferred_norm for h in header_norms):
             looks_like_header = True
-        elif all(any(c.isalpha() for c in cell) for cell in first_nonempty):
+        elif all(any(c.isalpha() for c in str(cell)) for cell in first_nonempty):
             # Looks like a text header rather than a single product name
             looks_like_header = True
         elif len(first_nonempty) == 1 and header_norms[0] in skip_words:
@@ -167,11 +179,11 @@ def _parse_sheet_rows(
 
 def fetch_sheet_items(
     spreadsheet_url: str,
-    sheet_name: str = "Shopping List",
+    sheet_name: str = "Sheet1",
     item_column: str = "Item",
 ) -> List[Tuple[str, int, Optional[str]]]:
     """
-    Fetch the shopping list from a Google Sheet.
+    Fetch the shopping list from a public Google Sheet using the gviz CSV export.
 
     Returns a list of (item_name, quantity, assigned_store) tuples.
     """
@@ -179,15 +191,19 @@ def fetch_sheet_items(
     if not spreadsheet_id:
         raise ValueError("Could not extract a valid Google Sheets spreadsheet ID from the URL.")
 
-    # Use A:Z to read all columns for the first 1000 rows.
-    range_ref = f"{sheet_name}!A:Z"
-    path = f"/v4/spreadsheets/{spreadsheet_id}/values/{range_ref}"
-    payload = _connector_json("GET", path)
+    gid = extract_gid(spreadsheet_url)
+    export_url = _build_export_url(spreadsheet_id, sheet_name, gid)
 
-    rows = payload.get("values", [])
-    if not rows:
-        return []
+    try:
+        df = pd.read_csv(export_url, dtype=str, keep_default_na=False)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to fetch the Google Sheet CSV export. "
+            f"Make sure the sheet is public (Share → Anyone with the link can view). Error: {e}"
+        ) from e
 
+    # Convert DataFrame to list of rows including the header row.
+    rows = [df.columns.tolist()] + df.values.tolist()
     return _parse_sheet_rows(rows, item_column=item_column)
 
 
@@ -243,7 +259,7 @@ def _match_items_to_master(
 def sync_shopping_list_from_sheet(
     conn: sqlite3.Connection,
     spreadsheet_url: str,
-    sheet_name: str = "Shopping List",
+    sheet_name: str = "Sheet1",
     item_column: str = "Item",
 ) -> Tuple[List[Tuple[int, str, int, Optional[str]]], List[str]]:
     """
