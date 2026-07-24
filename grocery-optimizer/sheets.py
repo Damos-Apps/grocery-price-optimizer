@@ -248,7 +248,13 @@ def _ensure_fallback_store_products(cur: sqlite3.Cursor, master_product_id: int)
             "SELECT name FROM master_products WHERE id = ?", (master_product_id,)
         ).fetchone()[0]
         from urllib.parse import quote
-        deep_link_url = f"https://www.google.com/search?q={quote(query + ' ' + store)}"
+        retailer_templates = {
+            "Woolworths": "https://www.woolworths.com.au/shop/search/products?searchTerm={item}",
+            "Coles": "https://www.coles.com.au/search?q={item}",
+            "Aldi": "https://www.aldi.com.au/en/search/?q={item}",
+        }
+        template = retailer_templates.get(store, "https://www.google.com/search?q={item}")
+        deep_link_url = template.format(item=quote(query))
         cur.execute(
             """
             INSERT INTO store_products (

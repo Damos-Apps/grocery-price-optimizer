@@ -1,5 +1,6 @@
 import sqlite3
 from typing import Optional
+from urllib.parse import quote
 
 
 def calc_unit_price_per_100(price: float, package_size: float) -> float:
@@ -55,6 +56,17 @@ def insert_store_product(
     return cur.lastrowid
 
 
+def make_search_url(store_name: str, item_name: str) -> str:
+    """Build a retailer search URL for the given item."""
+    encoded = quote(item_name)
+    template = {
+        "Woolworths": "https://www.woolworths.com.au/shop/search/products?searchTerm={item}",
+        "Coles": "https://www.coles.com.au/search?q={item}",
+        "Aldi": "https://www.aldi.com.au/en/search/?q={item}",
+    }.get(store_name, "https://www.google.com/search?q={item}")
+    return template.format(item=encoded)
+
+
 def insert_shopping_list_item(
     cur: sqlite3.Cursor,
     master_product_id: int,
@@ -89,7 +101,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=2000,
         unit_type='ml',
-        deep_link_url='https://www.google.com/search?q=Milk%202L%20Coles',
+        deep_link_url=make_search_url('Coles', 'Milk 2L'),
     )
     insert_store_product(
         cur,
@@ -101,7 +113,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=2000,
         unit_type='ml',
-        deep_link_url='https://www.google.com/search?q=Milk%202L%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Milk 2L'),
     )
     insert_store_product(
         cur,
@@ -113,7 +125,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=2000,
         unit_type='ml',
-        deep_link_url='https://www.google.com/search?q=Milk%202L%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Milk 2L'),
     )
 
     mp_2 = insert_master_product(cur, 'Milk 3L', 'Groceries', is_staple=True)
@@ -127,7 +139,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=3000,
         unit_type='ml',
-        deep_link_url='https://www.google.com/search?q=Milk%203L%20Coles',
+        deep_link_url=make_search_url('Coles', 'Milk 3L'),
     )
     insert_store_product(
         cur,
@@ -139,7 +151,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=3000,
         unit_type='ml',
-        deep_link_url='https://www.google.com/search?q=Milk%203L%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Milk 3L'),
     )
     insert_store_product(
         cur,
@@ -151,7 +163,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=3000,
         unit_type='ml',
-        deep_link_url='https://www.google.com/search?q=Milk%203L%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Milk 3L'),
     )
 
     mp_3 = insert_master_product(cur, 'Bread - Wholemeal', 'Groceries', is_staple=True)
@@ -165,7 +177,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=700,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Bread%20-%20Wholemeal%20Coles',
+        deep_link_url=make_search_url('Coles', 'Bread - Wholemeal'),
     )
     insert_store_product(
         cur,
@@ -177,7 +189,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=700,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Bread%20-%20Wholemeal%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Bread - Wholemeal'),
     )
     insert_store_product(
         cur,
@@ -189,7 +201,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=700,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Bread%20-%20Wholemeal%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Bread - Wholemeal'),
     )
 
     mp_4 = insert_master_product(cur, 'Eggs', 'Groceries', is_staple=True)
@@ -203,7 +215,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=12,
         unit_type='each',
-        deep_link_url='https://www.google.com/search?q=Eggs%20Coles',
+        deep_link_url=make_search_url('Coles', 'Eggs'),
     )
     insert_store_product(
         cur,
@@ -215,7 +227,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=12,
         unit_type='each',
-        deep_link_url='https://www.google.com/search?q=Eggs%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Eggs'),
     )
     insert_store_product(
         cur,
@@ -227,7 +239,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=12,
         unit_type='each',
-        deep_link_url='https://www.google.com/search?q=Eggs%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Eggs'),
     )
 
     mp_5 = insert_master_product(cur, 'Mince 500g', 'Groceries', is_staple=True)
@@ -241,7 +253,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Mince%20500g%20Coles',
+        deep_link_url=make_search_url('Coles', 'Mince 500g'),
     )
     insert_store_product(
         cur,
@@ -253,7 +265,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Mince%20500g%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Mince 500g'),
     )
     insert_store_product(
         cur,
@@ -265,7 +277,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Mince%20500g%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Mince 500g'),
     )
 
     mp_6 = insert_master_product(cur, 'Chicken Breast 500g', 'Groceries', is_staple=True)
@@ -279,7 +291,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Chicken%20Breast%20500g%20Coles',
+        deep_link_url=make_search_url('Coles', 'Chicken Breast 500g'),
     )
     insert_store_product(
         cur,
@@ -291,7 +303,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Chicken%20Breast%20500g%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Chicken Breast 500g'),
     )
     insert_store_product(
         cur,
@@ -303,7 +315,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Chicken%20Breast%20500g%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Chicken Breast 500g'),
     )
 
     mp_7 = insert_master_product(cur, 'Butter', 'Groceries', is_staple=True)
@@ -317,7 +329,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=250,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Butter%20Coles',
+        deep_link_url=make_search_url('Coles', 'Butter'),
     )
     insert_store_product(
         cur,
@@ -329,7 +341,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=250,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Butter%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Butter'),
     )
     insert_store_product(
         cur,
@@ -341,7 +353,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=250,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Butter%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Butter'),
     )
 
     mp_8 = insert_master_product(cur, 'Grapes', 'Groceries', is_staple=True)
@@ -355,7 +367,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Grapes%20Coles',
+        deep_link_url=make_search_url('Coles', 'Grapes'),
     )
     insert_store_product(
         cur,
@@ -367,7 +379,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Grapes%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Grapes'),
     )
     insert_store_product(
         cur,
@@ -379,7 +391,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Grapes%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Grapes'),
     )
 
     mp_9 = insert_master_product(cur, 'Honey', 'Groceries', is_staple=True)
@@ -393,7 +405,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Honey%20Coles',
+        deep_link_url=make_search_url('Coles', 'Honey'),
     )
     insert_store_product(
         cur,
@@ -405,7 +417,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Honey%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Honey'),
     )
     insert_store_product(
         cur,
@@ -417,7 +429,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Honey%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Honey'),
     )
 
     mp_10 = insert_master_product(cur, 'Flour', 'Groceries', is_staple=True)
@@ -431,7 +443,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=1000,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Flour%20Coles',
+        deep_link_url=make_search_url('Coles', 'Flour'),
     )
     insert_store_product(
         cur,
@@ -443,7 +455,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=1000,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Flour%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Flour'),
     )
     insert_store_product(
         cur,
@@ -455,7 +467,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=1000,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Flour%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Flour'),
     )
 
     mp_11 = insert_master_product(cur, 'Pasta 500g', 'Groceries', is_staple=True)
@@ -469,7 +481,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Pasta%20500g%20Coles',
+        deep_link_url=make_search_url('Coles', 'Pasta 500g'),
     )
     insert_store_product(
         cur,
@@ -481,7 +493,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Pasta%20500g%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Pasta 500g'),
     )
     insert_store_product(
         cur,
@@ -493,7 +505,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Pasta%20500g%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Pasta 500g'),
     )
 
     mp_12 = insert_master_product(cur, 'Spaghetti 500g', 'Groceries', is_staple=True)
@@ -507,7 +519,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Spaghetti%20500g%20Coles',
+        deep_link_url=make_search_url('Coles', 'Spaghetti 500g'),
     )
     insert_store_product(
         cur,
@@ -519,7 +531,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Spaghetti%20500g%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Spaghetti 500g'),
     )
     insert_store_product(
         cur,
@@ -531,7 +543,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=500,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Spaghetti%20500g%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Spaghetti 500g'),
     )
 
     mp_13 = insert_master_product(cur, 'Bread Rolls', 'Groceries', is_staple=True)
@@ -545,7 +557,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=6,
         unit_type='each',
-        deep_link_url='https://www.google.com/search?q=Bread%20Rolls%20Coles',
+        deep_link_url=make_search_url('Coles', 'Bread Rolls'),
     )
     insert_store_product(
         cur,
@@ -557,7 +569,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=6,
         unit_type='each',
-        deep_link_url='https://www.google.com/search?q=Bread%20Rolls%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Bread Rolls'),
     )
     insert_store_product(
         cur,
@@ -569,7 +581,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=6,
         unit_type='each',
-        deep_link_url='https://www.google.com/search?q=Bread%20Rolls%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Bread Rolls'),
     )
 
     mp_14 = insert_master_product(cur, 'Chicken Schnitzels', 'Groceries', is_staple=True)
@@ -583,7 +595,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=400,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Chicken%20Schnitzels%20Coles',
+        deep_link_url=make_search_url('Coles', 'Chicken Schnitzels'),
     )
     insert_store_product(
         cur,
@@ -595,7 +607,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=400,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Chicken%20Schnitzels%20Woolworths',
+        deep_link_url=make_search_url('Woolworths', 'Chicken Schnitzels'),
     )
     insert_store_product(
         cur,
@@ -607,7 +619,7 @@ def run_seed(conn: sqlite3.Connection) -> None:
         is_on_special=False,
         package_size=400,
         unit_type='g',
-        deep_link_url='https://www.google.com/search?q=Chicken%20Schnitzels%20Aldi',
+        deep_link_url=make_search_url('Aldi', 'Chicken Schnitzels'),
     )
 
     # ------------------------------------------------------------------

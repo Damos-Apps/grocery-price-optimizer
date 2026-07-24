@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import os
 import sys
+import urllib.parse
 
 # ------------------------------------------------------------------
 # Imports from the optimizer module
@@ -18,6 +19,25 @@ from optimizer import (
     StoreProduct,
 )
 from sheets import sync_shopping_list_from_sheet
+
+# ------------------------------------------------------------------
+# Retailer "Add to Cart" search URLs
+# ------------------------------------------------------------------
+_RETAILER_SEARCH_URLS = {
+    "Woolworths": "https://www.woolworths.com.au/shop/search/products?searchTerm={item}",
+    "Coles": "https://www.coles.com.au/search?q={item}",
+    "Aldi": "https://www.aldi.com.au/en/search/?q={item}",
+}
+
+
+def _build_add_to_cart_url(store_name: str, item_name: str) -> str:
+    """Return a retailer search URL for the given item, with safe URL encoding."""
+    encoded_item = urllib.parse.quote(item_name)
+    template = _RETAILER_SEARCH_URLS.get(
+        store_name, "https://www.google.com/search?q={item}"
+    )
+    return template.format(item=encoded_item)
+
 
 # ------------------------------------------------------------------
 # Page configuration
@@ -552,11 +572,11 @@ with tab1:
                         st.markdown(f"<small>Assigned: {oi.assigned_store}</small>", unsafe_allow_html=True)
 
                 with col3:
-                    if sp.deep_link_url:
-                        st.markdown(
-                            f'<a href="{sp.deep_link_url}" target="_blank" style="display:inline-block;padding:6px 14px;background:#0073e6;color:white;border-radius:6px;text-decoration:none;font-weight:600;">Add to Cart</a>',
-                            unsafe_allow_html=True,
-                        )
+                    cart_url = _build_add_to_cart_url(sp.store_name, oi.name)
+                    st.markdown(
+                        f'<a href="{cart_url}" target="_blank" style="display:inline-block;padding:6px 14px;background:#0073e6;color:white;border-radius:6px;text-decoration:none;font-weight:600;">Add to Cart</a>',
+                        unsafe_allow_html=True,
+                    )
 
     st.markdown("---")
     st.markdown(f"### Grand Total: **${display_total:.2f}**  ·  {mode_label} mode")
