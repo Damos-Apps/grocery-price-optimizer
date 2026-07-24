@@ -166,6 +166,92 @@ def get_store_products_for_master(conn, master_product_id):
     return products
 
 
+def add_weekly_sale_item(conn, product_name, store_name, special_price):
+    """
+    Create or update a master product and a store product for a temporary weekly
+    sale item, ensure it is on the active shopping list, and return the
+    master_product_id so the main page can re-run the optimisations.
+    """
+    cur = conn.cursor()
+
+    # Normalise the product name for a clean master record.
+    product_name = product_name.strip()
+
+    # Reuse an existing master product if the name matches exactly.
+    cur.execute("SELECT id FROM master_products WHERE name = ?", (product_name,))
+    row = cur.fetchone()
+    if row:
+        master_id = row[0]
+    else:
+        cur.execute(
+            "INSERT INTO master_products (name, category, is_staple) VALUES (?, ?, ?)",
+            (product_name, "Weekly Specials", 0),
+        )
+        master_id = cur.lastrowid
+
+    # Update or insert the store product for this special.
+    cur.execute(
+        "SELECT id FROM store_products WHERE master_product_id = ? AND store_name = ?",
+        (master_id, store_name),
+    )
+    row = cur.fetchone()
+    cart_url = _build_add_to_cart_url(store_name, product_name)
+    if row:
+        cur.execute(
+            """
+            UPDATE store_products
+            SET price = ?, is_on_special = 1, unit_price_per_100 = ?,
+                deep_link_url = ?, product_name = ?
+            WHERE id = ?
+            """,
+            (
+                special_price,
+                special_price,
+                cart_url,
+                f"{product_name} at {store_name}",
+                row[0],
+            ),
+        )
+    else:
+        cur.execute(
+            """
+            INSERT INTO store_products (
+                master_product_id, store_name, product_name, brand_tier,
+                price, is_on_special, package_size, unit_type, unit_price_per_100, deep_link_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                master_id,
+                store_name,
+                f"{product_name} at {store_name}",
+                "standard",
+                special_price,
+                1,
+                1.0,
+                "each",
+                special_price,
+                cart_url,
+            ),
+        )
+
+    # Add the item to the shopping list once if it is not already there.
+    cur.execute(
+        "SELECT id FROM shopping_list WHERE master_product_id = ?",
+        (master_id,),
+    )
+    if not cur.fetchone():
+        cur.execute(
+            """
+            INSERT INTO shopping_list (master_product_id, preference_tier, quantity, assigned_store)
+            VALUES (?, ?, ?, ?)
+            """,
+            (master_id, None, 1, store_name),
+        )
+
+    conn.commit()
+    return master_id
+
+
 def get_current_list_item_details(conn):
     """
     Return a list of dicts: for each shopping list item, include the item
@@ -528,7 +614,7 @@ cols[3].metric("Advanced Mode Stores", len(adv_lists))
 # ------------------------------------------------------------------
 # Tabs
 # ------------------------------------------------------------------
-tab1, tab2 = st.tabs(["Split Shopping Lists", "Quick Price Check"])
+tab1, tab2, tab3 = st.tabs(["Split Shopping Lists", "Quick Price Check", "Weekly Deals & Catalogues"])
 
 # ------------------------------------------------------------------
 # Tab 1: Split Shopping Lists
@@ -590,24 +676,47 @@ with tab1:
     st.markdown(f"### Grand Total: **${display_total:.2f}**  ·  {mode_label} mode")
 
 # ------------------------------------------------------------------
-# Tab 2: Quick Price Check
+# Tab 2: Quick Price Check (Interactive Search Engine)
 # ------------------------------------------------------------------
 with tab2:
     st.markdown("### Quick Price Check")
-    search_query = st.text_input("Search for a product (e.g. 'Strawberry Jam', 'Milk', 'Coffee')", placeholder="Type product name...")
+    st.markdown("Search our internal price database first, or fall back to live retailer searches.")
+
+    search_col, store_col = st.columns([3, 1])
+    with search_col:
+        search_query = st.text_input(
+            "Search for a product (e.g. 'Strawberry Jam', 'Milk', 'Coffee')",
+            placeholder="Type product name...",
+            key="quick_search_query",
+        )
+    with store_col:
+        store_filter = st.selectbox(
+            "Store filter",
+            ["All Stores", "Coles Only", "Woolworths Only", "ALDI Only"],
+            key="quick_store_filter",
+        )
 
     all_products = get_all_products(conn)
 
     if search_query:
-        search_lower = search_query.lower()
+        search_lower = search_query.lower().strip()
+
+        # Map the store filter to the allowed store names.
+        filter_map = {
+            "All Stores": ALL_STORES,
+            "Coles Only": ["Coles"],
+            "Woolworths Only": ["Woolworths"],
+            "ALDI Only": ["Aldi"],
+        }
+        allowed = filter_map.get(store_filter, ALL_STORES)
+
         filtered = [
             p for p in all_products
-            if search_lower in p[0].lower() or search_lower in p[2].lower()
+            if (search_lower in p[0].lower() or search_lower in p[2].lower())
+            and p[1] in allowed
         ]
 
-        if not filtered:
-            st.info("No matching products found.")
-        else:
+        if filtered:
             grouped = {}
             for p in filtered:
                 master = p[0]
@@ -617,29 +726,108 @@ with tab2:
                 st.markdown("---")
                 st.markdown(f"#### {master_name}")
 
+                cheapest = min(products, key=lambda p: p[7])
                 table_data = []
                 for p in products:
                     _, store, prod_name, price, is_special, size, unit, unit_price, link = p
+                    is_cheapest = (p[1] == cheapest[1] and p[7] == cheapest[7])
                     table_data.append({
                         "Store": store,
                         "Product": prod_name,
                         "Price": f"${price:.2f}",
                         "Unit Price": f"${unit_price:.4f}/100{unit}",
                         "Size": f"{size:.0f}{unit}",
-                        "Special": "Yes" if is_special else "No",
+                        "Special": "✅" if is_special else "",
+                        "Best Value": "🏆 Cheapest" if is_cheapest else "",
                         "Link": link,
                     })
 
                 st.dataframe(
                     table_data,
-                    column_order=["Store", "Product", "Price", "Unit Price", "Size", "Special"],
+                    column_order=["Store", "Product", "Price", "Unit Price", "Size", "Special", "Best Value"],
                     use_container_width=True,
                     hide_index=True,
                 )
 
-                cheapest = min(products, key=lambda p: p[7])
-                st.markdown(f"Best value: **{cheapest[2]}** at **{cheapest[1]}** — ${cheapest[3]:.2f} (${cheapest[7]:.4f}/100{cheapest[6]})")
+                st.markdown(
+                    f"**Best value:** {cheapest[2]} at **{cheapest[1]}** — "
+                    f"${cheapest[3]:.2f} (${cheapest[7]:.4f}/100{cheapest[6]})"
+                )
+        else:
+            # Local database fallback: dynamic live search buttons.
+            st.warning(f"'{search_query}' is not in our local database yet.")
+            st.markdown("**Check live prices on:**")
+            q_encoded = urllib.parse.quote(search_query)
+            live_cols = st.columns(3)
+            with live_cols[0]:
+                st.markdown(
+                    f'<a href="https://www.coles.com.au/search?q={q_encoded}" target="_coles" '
+                    f'style="display:inline-block;padding:10px 16px;background:#e60028;color:white;border-radius:6px;text-decoration:none;font-weight:600;">Coles</a>',
+                    unsafe_allow_html=True,
+                )
+            with live_cols[1]:
+                st.markdown(
+                    f'<a href="https://www.woolworths.com.au/shop/search/products?searchTerm={q_encoded}" target="_woolies" '
+                    f'style="display:inline-block;padding:10px 16px;background:#007dc5;color:white;border-radius:6px;text-decoration:none;font-weight:600;">Woolworths</a>',
+                    unsafe_allow_html=True,
+                )
+            with live_cols[2]:
+                st.markdown(
+                    f'<a href="https://www.doordash.com/p/aldi-australia" target="_doordash" '
+                    f'style="display:inline-block;padding:10px 16px;background:#eb1700;color:white;border-radius:6px;text-decoration:none;font-weight:600;">DoorDash / ALDI</a>',
+                    unsafe_allow_html=True,
+                )
     else:
-        st.info("Type a product name above to see price comparisons across all stores.")
+        st.info("Type a product name above and choose a store filter to see comparisons.")
+
+# ------------------------------------------------------------------
+# Tab 3: Weekly Deals & Catalogues
+# ------------------------------------------------------------------
+with tab3:
+    st.markdown("### Weekly Deals & Catalogues")
+    st.markdown("Quick links to this week’s catalogues and a form to add temporary sale items to your list.")
+
+    link_cols = st.columns(3)
+    with link_cols[0]:
+        st.markdown(
+            '<a href="https://www.coles.com.au/specials/half-price" target="_coles" '
+            'style="display:inline-block;padding:12px 18px;background:#e60028;color:white;border-radius:6px;text-decoration:none;font-weight:600;">Coles Half-Price Specials</a>',
+            unsafe_allow_html=True,
+        )
+    with link_cols[1]:
+        st.markdown(
+            '<a href="https://www.woolworths.com.au/shop/catalogue" target="_woolies" '
+            'style="display:inline-block;padding:12px 18px;background:#007dc5;color:white;border-radius:6px;text-decoration:none;font-weight:600;">Woolworths Catalogue & Deals</a>',
+            unsafe_allow_html=True,
+        )
+    with link_cols[2]:
+        st.markdown(
+            '<a href="https://www.aldi.com.au/en/special-buys/" target="_doordash" '
+            'style="display:inline-block;padding:12px 18px;background:#eb1700;color:white;border-radius:6px;text-decoration:none;font-weight:600;">ALDI Special Buys</a>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("---")
+    st.markdown("#### Add a temporary weekly sale item")
+    with st.form("weekly_sale_form", clear_on_submit=True):
+        sale_cols = st.columns([3, 2, 2, 1])
+        with sale_cols[0]:
+            sale_name = st.text_input("Product name", placeholder="e.g. Tim Tams 200g", key="sale_name")
+        with sale_cols[1]:
+            sale_store = st.selectbox("Store on sale at", ["Coles", "Woolworths", "Aldi"], key="sale_store")
+        with sale_cols[2]:
+            sale_price = st.number_input("Special price ($)", min_value=0.0, step=0.10, key="sale_price")
+        with sale_cols[3]:
+            st.markdown("<br>", unsafe_allow_html=True)
+            submitted = st.form_submit_button("Add", use_container_width=True, type="primary")
+
+        if submitted:
+            if not sale_name.strip() or sale_price <= 0:
+                st.error("Please enter a product name and a special price greater than 0.")
+            else:
+                add_weekly_sale_item(conn, sale_name.strip(), sale_store, float(sale_price))
+                st.cache_data.clear()
+                st.success(f"Added {sale_name.strip()} at {sale_store} for ${sale_price:.2f} to your shopping list.")
+                st.rerun()
 
 conn.close()
