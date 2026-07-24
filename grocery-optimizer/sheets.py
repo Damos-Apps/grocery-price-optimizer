@@ -207,16 +207,83 @@ def fetch_sheet_items(
     return _parse_sheet_rows(rows, item_column=item_column)
 
 
+def _get_or_create_master_product(
+    cur: sqlite3.Cursor, name: str, category: str = "Groceries", is_staple: bool = True
+) -> int:
+    """Get an existing master product by name or create a new one."""
+    norm = _normalise(name)
+    cur.execute("SELECT id, name FROM master_products")
+    for mid, mname in cur.fetchall():
+        if _normalise(mname) == norm:
+            return mid
+    cur.execute(
+        "INSERT INTO master_products (name, category, is_staple) VALUES (?, ?, ?)",
+        (name, category, int(is_staple)),
+    )
+    return cur.lastrowid
+
+
+def _ensure_fallback_store_products(cur: sqlite3.Cursor, master_product_id: int) -> None:
+    """
+    Create placeholder store products for a fallback item so it still appears
+    in the optimised shopping list. Existing products for this master product
+    are left untouched.
+    """
+    cur.execute(
+        "SELECT store_name FROM store_products WHERE master_product_id = ?",
+        (master_product_id,),
+    )
+    existing_stores = {row[0] for row in cur.fetchall()}
+
+    for store in ALL_STORES:
+        if store in existing_stores:
+            continue
+        # Use a small placeholder price so the item is included in totals.
+        price = 0.00
+        package_size = 1.0
+        unit_type = "each"
+        unit_price_per_100 = 0.0
+        product_name = f"{store} - {cur.execute('SELECT name FROM master_products WHERE id = ?', (master_product_id,)).fetchone()[0]} (price needed)"
+        query = cur.execute(
+            "SELECT name FROM master_products WHERE id = ?", (master_product_id,)
+        ).fetchone()[0]
+        from urllib.parse import quote
+        deep_link_url = f"https://www.google.com/search?q={quote(query + ' ' + store)}"
+        cur.execute(
+            """
+            INSERT INTO store_products (
+                master_product_id, store_name, product_name, brand_tier,
+                price, is_on_special, package_size, unit_type,
+                unit_price_per_100, deep_link_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                master_product_id,
+                store,
+                product_name,
+                "standard",
+                price,
+                0,
+                package_size,
+                unit_type,
+                unit_price_per_100,
+                deep_link_url,
+            ),
+        )
+
+
 def _match_items_to_master(
     conn: sqlite3.Connection,
     sheet_items: List[Tuple[str, int, Optional[str]]],
-) -> Tuple[List[Tuple[int, str, int, Optional[str]]], List[str]]:
+) -> Tuple[List[Tuple[int, str, int, Optional[str]]], List[Tuple[int, str, int, Optional[str]]]]:
     """
     Match sheet item names to master_product ids.
 
     Returns:
       - matched: list of (master_product_id, item_name, quantity, assigned_store)
-      - unmatched: list of sheet item names that could not be matched
+      - fallback: list of (master_product_id, item_name, quantity, assigned_store)
+                 for items that did not match an existing product and were
+                 created as new fallback master products.
     """
     cur = conn.cursor()
     cur.execute("SELECT id, name FROM master_products ORDER BY id")
@@ -224,7 +291,7 @@ def _match_items_to_master(
     normalised_masters = {mid: _normalise(name) for mid, name in masters.items()}
 
     matched: List[Tuple[int, str, int, Optional[str]]] = []
-    unmatched: List[str] = []
+    fallback: List[Tuple[int, str, int, Optional[str]]] = []
 
     for item_name, quantity, assigned_store in sheet_items:
         norm = _normalise(item_name)
@@ -239,9 +306,9 @@ def _match_items_to_master(
                 if norm in name_norm or name_norm in norm:
                     match_id = mid
                     break
-        # 3. Fuzzy match (built-in difflib)
+        # 3. Fuzzy match (built-in difflib) - use a slightly lower cutoff to be more forgiving
         if match_id is None:
-            close = get_close_matches(norm, normalised_masters.values(), n=1, cutoff=0.6)
+            close = get_close_matches(norm, normalised_masters.values(), n=1, cutoff=0.5)
             if close:
                 matched_name = close[0]
                 match_id = next(
@@ -249,11 +316,18 @@ def _match_items_to_master(
                 )
 
         if match_id is None:
-            unmatched.append(item_name)
+            # Create a fallback master product so the item is never excluded.
+            master_id = _get_or_create_master_product(cur, item_name, category="Groceries", is_staple=False)
+            _ensure_fallback_store_products(cur, master_id)
+            conn.commit()
+            # Update local lookup so the same item in the sheet doesn't duplicate.
+            masters[master_id] = item_name
+            normalised_masters[master_id] = norm
+            fallback.append((master_id, item_name, quantity, assigned_store))
         else:
             matched.append((match_id, item_name, quantity, assigned_store))
 
-    return matched, unmatched
+    return matched, fallback
 
 
 def sync_shopping_list_from_sheet(
@@ -261,18 +335,20 @@ def sync_shopping_list_from_sheet(
     spreadsheet_url: str,
     sheet_name: str = "Sheet1",
     item_column: str = "Item",
-) -> Tuple[List[Tuple[int, str, int, Optional[str]]], List[str]]:
+) -> Tuple[List[Tuple[int, str, int, Optional[str]]], List[Tuple[int, str, int, Optional[str]]]]:
     """
     Replace the current shopping_list with items fetched from the Google Sheet.
 
-    Returns (matched, unmatched) for display to the user.
+    Returns (matched, fallback) for display to the user. Every sheet row is
+    included in the shopping list; rows that could not be matched to an existing
+    product become new fallback products with placeholder prices.
     """
     sheet_items = fetch_sheet_items(spreadsheet_url, sheet_name=sheet_name, item_column=item_column)
-    matched, unmatched = _match_items_to_master(conn, sheet_items)
+    matched, fallback = _match_items_to_master(conn, sheet_items)
 
     cur = conn.cursor()
     cur.execute("DELETE FROM shopping_list")
-    for master_id, _, quantity, assigned_store in matched:
+    for master_id, _, quantity, assigned_store in matched + fallback:
         cur.execute(
             """
             INSERT INTO shopping_list (master_product_id, preference_tier, quantity, assigned_store)
@@ -281,4 +357,4 @@ def sync_shopping_list_from_sheet(
             (master_id, None, quantity, assigned_store),
         )
     conn.commit()
-    return matched, unmatched
+    return matched, fallback

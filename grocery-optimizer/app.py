@@ -371,13 +371,15 @@ if st.sidebar.button("Sync Shopping List", use_container_width=True, type="secon
         st.sidebar.error("Please enter a Google Sheet URL first.")
     else:
         try:
-            matched, unmatched = sync_shopping_list_from_sheet(
+            matched, fallback = sync_shopping_list_from_sheet(
                 conn, google_sheet_url, sheet_name=sheet_name, item_column=item_column
             )
-            st.sidebar.success(f"Synced {len(matched)} item(s) from Google Sheets.")
-            if unmatched:
+            total = len(matched) + len(fallback)
+            st.sidebar.success(f"Synced {total} item(s) from Google Sheets.")
+            if fallback:
                 st.sidebar.warning(
-                    f"{len(unmatched)} item(s) not found in the price database: {', '.join(unmatched)}"
+                    f"{len(fallback)} item(s) added as fallbacks with placeholder prices: "
+                    f"{', '.join(name for _, name, _, _ in fallback)}"
                 )
             st.cache_data.clear()
             st.rerun()
