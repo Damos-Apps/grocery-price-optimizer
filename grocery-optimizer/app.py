@@ -17,6 +17,7 @@ from optimizer import (
     format_store_lists,
     StoreProduct,
 )
+from sheets import sync_shopping_list_from_sheet
 
 # ------------------------------------------------------------------
 # Page configuration
@@ -345,6 +346,36 @@ if active_al:
 
 if not active_stores:
     st.sidebar.error("Please select at least one store.")
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Google Sheet Sync")
+
+google_sheet_url = st.sidebar.text_input(
+    "Google Sheet URL",
+    placeholder="https://docs.google.com/spreadsheets/d/...",
+    help="Paste a Google Sheet URL with a 'Shopping List' tab. The sheet will be read live when you click Sync.",
+)
+
+sheet_name = st.sidebar.text_input("Sheet name", value="Shopping List")
+item_column = st.sidebar.text_input("Item column name", value="Item")
+
+if st.sidebar.button("Sync Shopping List", use_container_width=True, type="secondary"):
+    if not google_sheet_url.strip():
+        st.sidebar.error("Please enter a Google Sheet URL first.")
+    else:
+        try:
+            matched, unmatched = sync_shopping_list_from_sheet(
+                conn, google_sheet_url, sheet_name=sheet_name, item_column=item_column
+            )
+            st.sidebar.success(f"Synced {len(matched)} item(s) from Google Sheets.")
+            if unmatched:
+                st.sidebar.warning(
+                    f"{len(unmatched)} item(s) not found in the price database: {', '.join(unmatched)}"
+                )
+            st.cache_data.clear()
+            st.rerun()
+        except Exception as e:
+            st.sidebar.error(f"Sync failed: {e}")
 
 st.sidebar.markdown("---")
 
