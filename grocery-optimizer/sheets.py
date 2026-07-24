@@ -251,10 +251,14 @@ def _ensure_fallback_store_products(cur: sqlite3.Cursor, master_product_id: int)
         retailer_templates = {
             "Woolworths": "https://www.woolworths.com.au/shop/search/products?searchTerm={item}",
             "Coles": "https://www.coles.com.au/search?q={item}",
-            "Aldi": "https://www.aldi.com.au/en/search/?q={item}",
+            # ALDI products route to DoorDash for home delivery.
+            "Aldi": "https://www.doordash.com/p/aldi-australia",
         }
         template = retailer_templates.get(store, "https://www.google.com/search?q={item}")
-        deep_link_url = template.format(item=quote(query))
+        if "{item}" in template:
+            deep_link_url = template.format(item=quote(query))
+        else:
+            deep_link_url = template
         cur.execute(
             """
             INSERT INTO store_products (

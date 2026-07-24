@@ -26,7 +26,8 @@ from sheets import sync_shopping_list_from_sheet
 _RETAILER_SEARCH_URLS = {
     "Woolworths": "https://www.woolworths.com.au/shop/search/products?searchTerm={item}",
     "Coles": "https://www.coles.com.au/search?q={item}",
-    "Aldi": "https://www.aldi.com.au/en/search/?q={item}",
+    # ALDI products route to DoorDash for home delivery.
+    "Aldi": "https://www.doordash.com/p/aldi-australia",
 }
 
 
@@ -36,7 +37,9 @@ def _build_add_to_cart_url(store_name: str, item_name: str) -> str:
     template = _RETAILER_SEARCH_URLS.get(
         store_name, "https://www.google.com/search?q={item}"
     )
-    return template.format(item=encoded_item)
+    if "{item}" in template:
+        return template.format(item=encoded_item)
+    return template
 
 
 # ------------------------------------------------------------------

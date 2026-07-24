@@ -62,9 +62,12 @@ def make_search_url(store_name: str, item_name: str) -> str:
     template = {
         "Woolworths": "https://www.woolworths.com.au/shop/search/products?searchTerm={item}",
         "Coles": "https://www.coles.com.au/search?q={item}",
-        "Aldi": "https://www.aldi.com.au/en/search/?q={item}",
+        # ALDI products route to DoorDash for home delivery.
+        "Aldi": "https://www.doordash.com/p/aldi-australia",
     }.get(store_name, "https://www.google.com/search?q={item}")
-    return template.format(item=encoded)
+    if "{item}" in template:
+        return template.format(item=encoded)
+    return template
 
 
 def insert_shopping_list_item(
