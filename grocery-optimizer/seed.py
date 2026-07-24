@@ -15,10 +15,7 @@ def insert_master_product(
     category: str,
     is_staple: bool,
 ) -> int:
-    cur.execute(
-        "INSERT INTO master_products (name, category, is_staple) VALUES (?, ?, ?)",
-        (name, category, int(is_staple)),
-    )
+    cur.execute("INSERT INTO master_products (name, category, is_staple) VALUES (?, ?, ?)", (name, category, int(is_staple)))
     return cur.lastrowid
 
 
@@ -35,14 +32,13 @@ def insert_store_product(
     deep_link_url: Optional[str] = None,
 ) -> int:
     unit_price_per_100 = calc_unit_price_per_100(price, package_size)
-    cur.execute(
-        """
+    cur.execute("""
         INSERT INTO store_products (
             master_product_id, store_name, product_name, brand_tier,
             price, is_on_special, package_size, unit_type,
             unit_price_per_100, deep_link_url
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+    """,
         (
             master_product_id,
             store_name,
@@ -66,11 +62,10 @@ def insert_shopping_list_item(
     quantity: int,
     assigned_store: Optional[str],
 ) -> int:
-    cur.execute(
-        """
+    cur.execute("""
         INSERT INTO shopping_list (master_product_id, preference_tier, quantity, assigned_store)
         VALUES (?, ?, ?, ?)
-        """,
+    """,
         (master_product_id, preference_tier, quantity, assigned_store),
     )
     return cur.lastrowid
@@ -80,293 +75,559 @@ def run_seed(conn: sqlite3.Connection) -> None:
     cur = conn.cursor()
 
     # ------------------------------------------------------------------
-    # 1. MASTER PRODUCTS
+    # MASTER PRODUCTS AND STORE PRODUCTS — loaded from Grocery_List_Staples_w_Prices.xlsx
     # ------------------------------------------------------------------
-    mp_jam_id = insert_master_product(cur, "Strawberry Jam", "Condiments & Spreads", is_staple=False)
-    mp_milk_id = insert_master_product(cur, "Full Cream Milk 2L", "Dairy & Eggs", is_staple=True)
-    mp_coffee_id = insert_master_product(cur, "Instant Coffee", "Coffee & Tea", is_staple=False)
 
-    # ------------------------------------------------------------------
-    # 2. STORE PRODUCTS — Strawberry Jam (all 500g for fair comparison)
-    # ------------------------------------------------------------------
+    mp_1 = insert_master_product(cur, 'Milk 2L', 'Groceries', is_staple=True)
     insert_store_product(
         cur,
-        master_product_id=mp_jam_id,
-        store_name="Coles",
-        product_name="IXL Strawberry Jam 500g",
-        brand_tier="standard",
-        price=5.50,
-        is_on_special=False,
-        package_size=500,
-        unit_type="g",
-        deep_link_url="https://www.coles.com.au/search?q=IXL+strawberry+jam+500g",
-    )
-
-    insert_store_product(
-        cur,
-        master_product_id=mp_jam_id,
-        store_name="Woolworths",
-        product_name="Bonne Maman Strawberry Jam 500g",
-        brand_tier="premium",
-        price=7.50,
-        is_on_special=False,
-        package_size=500,
-        unit_type="g",
-        deep_link_url="https://www.woolworths.com.au/shop/search/products?searchTerm=bonne+maman+strawberry+jam+500g",
-    )
-
-    insert_store_product(
-        cur,
-        master_product_id=mp_jam_id,
-        store_name="Aldi",
-        product_name="Grandessa Strawberry Jam 500g",
-        brand_tier="budget",
-        price=5.30,
-        is_on_special=False,
-        package_size=500,
-        unit_type="g",
-        deep_link_url="https://www.aldi.com.au/en/grocery-specialbuys/search/?query=grandessa+strawberry+jam",
-    )
-
-    # ------------------------------------------------------------------
-    # 3. STORE PRODUCTS — Full Cream Milk 2L (2000 ml for unit comparison)
-    # ------------------------------------------------------------------
-    insert_store_product(
-        cur,
-        master_product_id=mp_milk_id,
-        store_name="Coles",
-        product_name="Coles Full Cream Milk 2L",
-        brand_tier="budget",
-        price=2.85,
+        master_product_id=mp_1,
+        store_name='Coles',
+        product_name='Milk 2L at Coles',
+        brand_tier='standard',
+        price=4.40,
         is_on_special=False,
         package_size=2000,
-        unit_type="ml",
-        deep_link_url="https://www.coles.com.au/search?q=coles+full+cream+milk+2l",
+        unit_type='ml',
+        deep_link_url='https://www.google.com/search?q=Milk%202L%20Coles',
     )
-
     insert_store_product(
         cur,
-        master_product_id=mp_milk_id,
-        store_name="Woolworths",
-        product_name="Woolworths Full Cream Milk 2L",
-        brand_tier="budget",
-        price=2.90,
+        master_product_id=mp_1,
+        store_name='Woolworths',
+        product_name='Milk 2L at Woolworths',
+        brand_tier='standard',
+        price=4.70,
         is_on_special=False,
         package_size=2000,
-        unit_type="ml",
-        deep_link_url="https://www.woolworths.com.au/shop/search/products?searchTerm=woolworths+full+cream+milk+2l",
+        unit_type='ml',
+        deep_link_url='https://www.google.com/search?q=Milk%202L%20Woolworths',
     )
-
     insert_store_product(
         cur,
-        master_product_id=mp_milk_id,
-        store_name="Aldi",
-        product_name="Farmdale Full Cream Milk 2L",
-        brand_tier="budget",
-        price=2.49,
+        master_product_id=mp_1,
+        store_name='Aldi',
+        product_name='Milk 2L at Aldi',
+        brand_tier='budget',
+        price=3.55,
         is_on_special=False,
         package_size=2000,
-        unit_type="ml",
-        deep_link_url="https://www.aldi.com.au/en/grocery-specialbuys/search/?query=farmdale+full+cream+milk+2l",
+        unit_type='ml',
+        deep_link_url='https://www.google.com/search?q=Milk%202L%20Aldi',
     )
 
-    # ------------------------------------------------------------------
-    # 4. STORE PRODUCTS — Moccona Coffee 200g
-    # ------------------------------------------------------------------
-    regular_price = 18.00
-    special_price = round(regular_price * 0.50, 2)
-
+    mp_2 = insert_master_product(cur, 'Milk 3L', 'Groceries', is_staple=True)
     insert_store_product(
         cur,
-        master_product_id=mp_coffee_id,
-        store_name="Coles",
-        product_name="Moccona Classic Dark Roast Instant Coffee 200g",
-        brand_tier="premium",
-        price=special_price,
-        is_on_special=True,
-        package_size=200,
-        unit_type="g",
-        deep_link_url="https://www.coles.com.au/search?q=moccona+coffee+200g",
-    )
-
-    insert_store_product(
-        cur,
-        master_product_id=mp_coffee_id,
-        store_name="Woolworths",
-        product_name="Moccona Classic Dark Roast Instant Coffee 200g",
-        brand_tier="premium",
-        price=18.00,
+        master_product_id=mp_2,
+        store_name='Coles',
+        product_name='Milk 3L at Coles',
+        brand_tier='standard',
+        price=5.15,
         is_on_special=False,
-        package_size=200,
-        unit_type="g",
-        deep_link_url="https://www.woolworths.com.au/shop/search/products?searchTerm=moccona+coffee+200g",
+        package_size=3000,
+        unit_type='ml',
+        deep_link_url='https://www.google.com/search?q=Milk%203L%20Coles',
     )
-
     insert_store_product(
         cur,
-        master_product_id=mp_coffee_id,
-        store_name="Aldi",
-        product_name="Alcafe Gold Roast Instant Coffee 200g",
-        brand_tier="budget",
-        price=12.00,
+        master_product_id=mp_2,
+        store_name='Woolworths',
+        product_name='Milk 3L at Woolworths',
+        brand_tier='standard',
+        price=5.15,
         is_on_special=False,
-        package_size=200,
-        unit_type="g",
-        deep_link_url="https://www.aldi.com.au/en/grocery-specialbuys/search/?query=alcafe+coffee+200g",
+        package_size=3000,
+        unit_type='ml',
+        deep_link_url='https://www.google.com/search?q=Milk%203L%20Woolworths',
     )
-
-    # ------------------------------------------------------------------
-    # 5. MORE MASTER PRODUCTS for a richer demo
-    # ------------------------------------------------------------------
-    mp_vegemite_id = insert_master_product(cur, "Vegemite 380g", "Condiments & Spreads", is_staple=True)
-    mp_timtams_id = insert_master_product(cur, "Tim Tams 200g", "Biscuits & Snacks", is_staple=False)
-
-    # ------------------------------------------------------------------
-    # 6. STORE PRODUCTS — Vegemite (Coles on special)
-    # ------------------------------------------------------------------
     insert_store_product(
         cur,
-        master_product_id=mp_vegemite_id,
-        store_name="Coles",
-        product_name="Vegemite Spread 380g",
-        brand_tier="standard",
-        price=5.00,
-        is_on_special=True,
-        package_size=380,
-        unit_type="g",
-        deep_link_url="https://www.coles.com.au/search?q=vegemite+380g",
-    )
-
-    insert_store_product(
-        cur,
-        master_product_id=mp_vegemite_id,
-        store_name="Woolworths",
-        product_name="Vegemite Spread 380g",
-        brand_tier="standard",
-        price=7.00,
+        master_product_id=mp_2,
+        store_name='Aldi',
+        product_name='Milk 3L at Aldi',
+        brand_tier='budget',
+        price=5.15,
         is_on_special=False,
-        package_size=380,
-        unit_type="g",
-        deep_link_url="https://www.woolworths.com.au/shop/search/products?searchTerm=vegemite+380g",
+        package_size=3000,
+        unit_type='ml',
+        deep_link_url='https://www.google.com/search?q=Milk%203L%20Aldi',
     )
 
+    mp_3 = insert_master_product(cur, 'Bread - Wholemeal', 'Groceries', is_staple=True)
     insert_store_product(
         cur,
-        master_product_id=mp_vegemite_id,
-        store_name="Aldi",
-        product_name="Berg Spread 380g",
-        brand_tier="budget",
+        master_product_id=mp_3,
+        store_name='Coles',
+        product_name='Bread - Wholemeal at Coles',
+        brand_tier='standard',
+        price=4.70,
+        is_on_special=False,
+        package_size=700,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Bread%20-%20Wholemeal%20Coles',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_3,
+        store_name='Woolworths',
+        product_name='Bread - Wholemeal at Woolworths',
+        brand_tier='standard',
+        price=4.70,
+        is_on_special=False,
+        package_size=700,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Bread%20-%20Wholemeal%20Woolworths',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_3,
+        store_name='Aldi',
+        product_name='Bread - Wholemeal at Aldi',
+        brand_tier='budget',
+        price=3.69,
+        is_on_special=False,
+        package_size=700,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Bread%20-%20Wholemeal%20Aldi',
+    )
+
+    mp_4 = insert_master_product(cur, 'Eggs', 'Groceries', is_staple=True)
+    insert_store_product(
+        cur,
+        master_product_id=mp_4,
+        store_name='Coles',
+        product_name='Eggs at Coles',
+        brand_tier='standard',
+        price=6.20,
+        is_on_special=False,
+        package_size=12,
+        unit_type='each',
+        deep_link_url='https://www.google.com/search?q=Eggs%20Coles',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_4,
+        store_name='Woolworths',
+        product_name='Eggs at Woolworths',
+        brand_tier='standard',
+        price=6.20,
+        is_on_special=False,
+        package_size=12,
+        unit_type='each',
+        deep_link_url='https://www.google.com/search?q=Eggs%20Woolworths',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_4,
+        store_name='Aldi',
+        product_name='Eggs at Aldi',
+        brand_tier='budget',
+        price=5.99,
+        is_on_special=False,
+        package_size=12,
+        unit_type='each',
+        deep_link_url='https://www.google.com/search?q=Eggs%20Aldi',
+    )
+
+    mp_5 = insert_master_product(cur, 'Mince 500g', 'Groceries', is_staple=True)
+    insert_store_product(
+        cur,
+        master_product_id=mp_5,
+        store_name='Coles',
+        product_name='Mince 500g at Coles',
+        brand_tier='standard',
+        price=9.00,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Mince%20500g%20Coles',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_5,
+        store_name='Woolworths',
+        product_name='Mince 500g at Woolworths',
+        brand_tier='standard',
+        price=9.00,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Mince%20500g%20Woolworths',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_5,
+        store_name='Aldi',
+        product_name='Mince 500g at Aldi',
+        brand_tier='budget',
+        price=7.99,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Mince%20500g%20Aldi',
+    )
+
+    mp_6 = insert_master_product(cur, 'Chicken Breast 500g', 'Groceries', is_staple=True)
+    insert_store_product(
+        cur,
+        master_product_id=mp_6,
+        store_name='Coles',
+        product_name='Chicken Breast 500g at Coles',
+        brand_tier='standard',
+        price=8.70,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Chicken%20Breast%20500g%20Coles',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_6,
+        store_name='Woolworths',
+        product_name='Chicken Breast 500g at Woolworths',
+        brand_tier='standard',
+        price=8.70,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Chicken%20Breast%20500g%20Woolworths',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_6,
+        store_name='Aldi',
+        product_name='Chicken Breast 500g at Aldi',
+        brand_tier='budget',
+        price=7.60,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Chicken%20Breast%20500g%20Aldi',
+    )
+
+    mp_7 = insert_master_product(cur, 'Butter', 'Groceries', is_staple=True)
+    insert_store_product(
+        cur,
+        master_product_id=mp_7,
+        store_name='Coles',
+        product_name='Butter at Coles',
+        brand_tier='standard',
+        price=6.80,
+        is_on_special=False,
+        package_size=250,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Butter%20Coles',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_7,
+        store_name='Woolworths',
+        product_name='Butter at Woolworths',
+        brand_tier='standard',
+        price=6.80,
+        is_on_special=False,
+        package_size=250,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Butter%20Woolworths',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_7,
+        store_name='Aldi',
+        product_name='Butter at Aldi',
+        brand_tier='budget',
+        price=7.99,
+        is_on_special=False,
+        package_size=250,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Butter%20Aldi',
+    )
+
+    mp_8 = insert_master_product(cur, 'Grapes', 'Groceries', is_staple=True)
+    insert_store_product(
+        cur,
+        master_product_id=mp_8,
+        store_name='Coles',
+        product_name='Grapes at Coles',
+        brand_tier='standard',
         price=6.00,
         is_on_special=False,
-        package_size=380,
-        unit_type="g",
-        deep_link_url="https://www.aldi.com.au/en/grocery-specialbuys/search/?query=berg+spread+380g",
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Grapes%20Coles',
     )
-
-    # ------------------------------------------------------------------
-    # 7. STORE PRODUCTS — Tim Tams (Coles on special)
-    # ------------------------------------------------------------------
     insert_store_product(
         cur,
-        master_product_id=mp_timtams_id,
-        store_name="Coles",
-        product_name="Arnott's Tim Tam Original 200g",
-        brand_tier="standard",
-        price=2.50,
-        is_on_special=True,
-        package_size=200,
-        unit_type="g",
-        deep_link_url="https://www.coles.com.au/search?q=tim+tam+200g",
-    )
-
-    insert_store_product(
-        cur,
-        master_product_id=mp_timtams_id,
-        store_name="Woolworths",
-        product_name="Arnott's Tim Tam Original 200g",
-        brand_tier="standard",
-        price=4.50,
+        master_product_id=mp_8,
+        store_name='Woolworths',
+        product_name='Grapes at Woolworths',
+        brand_tier='standard',
+        price=6.00,
         is_on_special=False,
-        package_size=200,
-        unit_type="g",
-        deep_link_url="https://www.woolworths.com.au/shop/search/products?searchTerm=tim+tam+200g",
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Grapes%20Woolworths',
     )
-
     insert_store_product(
         cur,
-        master_product_id=mp_timtams_id,
-        store_name="Aldi",
-        product_name="Belmont Choc Biscuits 200g",
-        brand_tier="budget",
+        master_product_id=mp_8,
+        store_name='Aldi',
+        product_name='Grapes at Aldi',
+        brand_tier='budget',
+        price=4.22,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Grapes%20Aldi',
+    )
+
+    mp_9 = insert_master_product(cur, 'Honey', 'Groceries', is_staple=True)
+    insert_store_product(
+        cur,
+        master_product_id=mp_9,
+        store_name='Coles',
+        product_name='Honey at Coles',
+        brand_tier='standard',
+        price=6.50,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Honey%20Coles',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_9,
+        store_name='Woolworths',
+        product_name='Honey at Woolworths',
+        brand_tier='standard',
+        price=6.70,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Honey%20Woolworths',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_9,
+        store_name='Aldi',
+        product_name='Honey at Aldi',
+        brand_tier='budget',
+        price=5.99,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Honey%20Aldi',
+    )
+
+    mp_10 = insert_master_product(cur, 'Flour', 'Groceries', is_staple=True)
+    insert_store_product(
+        cur,
+        master_product_id=mp_10,
+        store_name='Coles',
+        product_name='Flour at Coles',
+        brand_tier='standard',
+        price=2.40,
+        is_on_special=False,
+        package_size=1000,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Flour%20Coles',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_10,
+        store_name='Woolworths',
+        product_name='Flour at Woolworths',
+        brand_tier='standard',
+        price=2.40,
+        is_on_special=False,
+        package_size=1000,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Flour%20Woolworths',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_10,
+        store_name='Aldi',
+        product_name='Flour at Aldi',
+        brand_tier='budget',
+        price=2.39,
+        is_on_special=False,
+        package_size=1000,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Flour%20Aldi',
+    )
+
+    mp_11 = insert_master_product(cur, 'Pasta 500g', 'Groceries', is_staple=True)
+    insert_store_product(
+        cur,
+        master_product_id=mp_11,
+        store_name='Coles',
+        product_name='Pasta 500g at Coles',
+        brand_tier='standard',
+        price=0.90,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Pasta%20500g%20Coles',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_11,
+        store_name='Woolworths',
+        product_name='Pasta 500g at Woolworths',
+        brand_tier='standard',
+        price=0.90,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Pasta%20500g%20Woolworths',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_11,
+        store_name='Aldi',
+        product_name='Pasta 500g at Aldi',
+        brand_tier='budget',
+        price=0.89,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Pasta%20500g%20Aldi',
+    )
+
+    mp_12 = insert_master_product(cur, 'Spaghetti 500g', 'Groceries', is_staple=True)
+    insert_store_product(
+        cur,
+        master_product_id=mp_12,
+        store_name='Coles',
+        product_name='Spaghetti 500g at Coles',
+        brand_tier='standard',
+        price=0.90,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Spaghetti%20500g%20Coles',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_12,
+        store_name='Woolworths',
+        product_name='Spaghetti 500g at Woolworths',
+        brand_tier='standard',
+        price=0.90,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Spaghetti%20500g%20Woolworths',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_12,
+        store_name='Aldi',
+        product_name='Spaghetti 500g at Aldi',
+        brand_tier='budget',
+        price=0.89,
+        is_on_special=False,
+        package_size=500,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Spaghetti%20500g%20Aldi',
+    )
+
+    mp_13 = insert_master_product(cur, 'Bread Rolls', 'Groceries', is_staple=True)
+    insert_store_product(
+        cur,
+        master_product_id=mp_13,
+        store_name='Coles',
+        product_name='Bread Rolls at Coles',
+        brand_tier='standard',
         price=3.00,
         is_on_special=False,
-        package_size=200,
-        unit_type="g",
-        deep_link_url="https://www.aldi.com.au/en/grocery-specialbuys/search/?query=choc+biscuits+200g",
+        package_size=6,
+        unit_type='each',
+        deep_link_url='https://www.google.com/search?q=Bread%20Rolls%20Coles',
     )
-
-    # ------------------------------------------------------------------
-    # 8. EXTRA MASTER PRODUCT — for Smart Substitution demo
-    # ------------------------------------------------------------------
-    mp_cereal_id = insert_master_product(cur, "Corn Flakes 500g", "Breakfast Cereals", is_staple=True)
-
-    # Coles premium cereal
     insert_store_product(
         cur,
-        master_product_id=mp_cereal_id,
-        store_name="Coles",
-        product_name="Kellogg's Corn Flakes 500g",
-        brand_tier="premium",
-        price=6.50,
+        master_product_id=mp_13,
+        store_name='Woolworths',
+        product_name='Bread Rolls at Woolworths',
+        brand_tier='standard',
+        price=3.00,
         is_on_special=False,
-        package_size=500,
-        unit_type="g",
-        deep_link_url="https://www.coles.com.au/search?q=kelloggs+corn+flakes+500g",
+        package_size=6,
+        unit_type='each',
+        deep_link_url='https://www.google.com/search?q=Bread%20Rolls%20Woolworths',
     )
-
-    # Woolworths premium cereal
     insert_store_product(
         cur,
-        master_product_id=mp_cereal_id,
-        store_name="Woolworths",
-        product_name="Kellogg's Corn Flakes 500g",
-        brand_tier="premium",
-        price=6.50,
+        master_product_id=mp_13,
+        store_name='Aldi',
+        product_name='Bread Rolls at Aldi',
+        brand_tier='budget',
+        price=2.69,
         is_on_special=False,
-        package_size=500,
-        unit_type="g",
-        deep_link_url="https://www.woolworths.com.au/shop/search/products?searchTerm=kelloggs+corn+flakes+500g",
+        package_size=6,
+        unit_type='each',
+        deep_link_url='https://www.google.com/search?q=Bread%20Rolls%20Aldi',
     )
 
-    # Aldi budget cereal
+    mp_14 = insert_master_product(cur, 'Chicken Schnitzels', 'Groceries', is_staple=True)
     insert_store_product(
         cur,
-        master_product_id=mp_cereal_id,
-        store_name="Aldi",
-        product_name="Harvest Morn Corn Flakes 500g",
-        brand_tier="budget",
-        price=2.50,
+        master_product_id=mp_14,
+        store_name='Coles',
+        product_name='Chicken Schnitzels at Coles',
+        brand_tier='standard',
+        price=11.95,
         is_on_special=False,
-        package_size=500,
-        unit_type="g",
-        deep_link_url="https://www.aldi.com.au/en/grocery-specialbuys/search/?query=corn+flakes+500g",
+        package_size=400,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Chicken%20Schnitzels%20Coles',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_14,
+        store_name='Woolworths',
+        product_name='Chicken Schnitzels at Woolworths',
+        brand_tier='standard',
+        price=12.00,
+        is_on_special=False,
+        package_size=400,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Chicken%20Schnitzels%20Woolworths',
+    )
+    insert_store_product(
+        cur,
+        master_product_id=mp_14,
+        store_name='Aldi',
+        product_name='Chicken Schnitzels at Aldi',
+        brand_tier='budget',
+        price=9.00,
+        is_on_special=False,
+        package_size=400,
+        unit_type='g',
+        deep_link_url='https://www.google.com/search?q=Chicken%20Schnitzels%20Aldi',
     )
 
     # ------------------------------------------------------------------
-    # 9. SHOPPING LIST — add one entry per master product
+    # SHOPPING LIST — add all items
     # ------------------------------------------------------------------
-    # Jam: no strong preference
-    insert_shopping_list_item(cur, master_product_id=mp_jam_id, preference_tier=None, quantity=1, assigned_store=None)
-    # Milk: budget tier
-    insert_shopping_list_item(cur, master_product_id=mp_milk_id, preference_tier="budget", quantity=1, assigned_store=None)
-    # Coffee: premium tier, already on special at Coles
-    insert_shopping_list_item(cur, master_product_id=mp_coffee_id, preference_tier="premium", quantity=1, assigned_store="Coles")
-    # Vegemite: staple, no preference
-    insert_shopping_list_item(cur, master_product_id=mp_vegemite_id, preference_tier=None, quantity=1, assigned_store=None)
-    # Tim Tams: no preference
-    insert_shopping_list_item(cur, master_product_id=mp_timtams_id, preference_tier=None, quantity=1, assigned_store=None)
-    # Cereal: premium tier — this will trigger a smart substitution suggestion
-    insert_shopping_list_item(cur, master_product_id=mp_cereal_id, preference_tier="premium", quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_1, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_2, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_3, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_4, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_5, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_6, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_7, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_8, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_9, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_10, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_11, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_12, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_13, preference_tier=None, quantity=1, assigned_store=None)
+    insert_shopping_list_item(cur, master_product_id=mp_14, preference_tier=None, quantity=1, assigned_store=None)
 
     conn.commit()
     print("Seed data inserted successfully.")
+
