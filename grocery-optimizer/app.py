@@ -348,15 +348,22 @@ if not active_stores:
     st.sidebar.error("Please select at least one store.")
 
 st.sidebar.markdown("---")
+
+# Open the database connection early so the sidebar sync button can use it.
+conn = get_db_connection()
+
 st.sidebar.markdown("### Google Sheet Sync")
+
+DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1nxW1c1EotnDG-J1iLZ9RuMegcJrjPN-gs3eVyfRRlTA/edit?gid=0#gid=0"
 
 google_sheet_url = st.sidebar.text_input(
     "Google Sheet URL",
+    value=DEFAULT_SHEET_URL,
     placeholder="https://docs.google.com/spreadsheets/d/...",
     help="Paste a Google Sheet URL with a 'Shopping List' tab. The sheet will be read live when you click Sync.",
 )
 
-sheet_name = st.sidebar.text_input("Sheet name", value="Shopping List")
+sheet_name = st.sidebar.text_input("Sheet name", value="Sheet1")
 item_column = st.sidebar.text_input("Item column name", value="Item")
 
 if st.sidebar.button("Sync Shopping List", use_container_width=True, type="secondary"):
@@ -392,7 +399,6 @@ if not active_stores:
 # ------------------------------------------------------------------
 # Main content
 # ------------------------------------------------------------------
-conn = get_db_connection()
 
 # Load shopping list and optimizer data
 shopping_list = load_shopping_list(conn)

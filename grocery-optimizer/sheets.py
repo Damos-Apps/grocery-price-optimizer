@@ -95,11 +95,15 @@ def _parse_sheet_rows(
 
     Handles:
       - A header row with column names (Item, Quantity, Store, etc.)
+      - A title/header cell such as 'shopping' in a single-column list
       - No header row (first column assumed to be items)
       - Empty / whitespace rows
     """
     if not rows:
         return []
+
+    # Common single-column header/title words that are not actual items.
+    skip_words = {"shopping", "list", "items", "groceries", "shop", "buy"}
 
     # Detect header row: first non-empty row that contains a string resembling
     # the item column name (or any sensible text). If the first row is all text,
@@ -114,6 +118,9 @@ def _parse_sheet_rows(
             looks_like_header = True
         elif all(any(c.isalpha() for c in cell) for cell in first_nonempty):
             # Looks like a text header rather than a single product name
+            looks_like_header = True
+        elif len(first_nonempty) == 1 and header_norms[0] in skip_words:
+            # Single-column sheets often have a title like "shopping"
             looks_like_header = True
 
     if looks_like_header:
