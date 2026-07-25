@@ -13,7 +13,7 @@ including Streamlit Cloud.
 import re
 import sqlite3
 from difflib import get_close_matches
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 from urllib.parse import urlparse, parse_qs
 
 import pandas as pd
@@ -175,6 +175,78 @@ def _parse_sheet_rows(
         items.append((item_name, quantity, assigned_store))
 
     return items
+
+
+def fetch_weekly_specials(
+    spreadsheet_url: str,
+    sheet_name: str = "Weekly_Specials",
+) -> List[Dict[str, object]]:
+    """
+    Fetch weekly specials from a public Google Sheet using the gviz CSV export.
+
+    Expected CSV columns: Product Name, Store, Sale Price (flexible headers).
+    Returns a list of dicts with keys: name, store, price.
+    """
+    spreadsheet_id = extract_spreadsheet_id(spreadsheet_url)
+    if not spreadsheet_id:
+        raise ValueError("Could not extract a valid Google Sheets spreadsheet ID from the URL.")
+
+    gid = extract_gid(spreadsheet_url)
+    export_url = _build_export_url(spreadsheet_id, sheet_name, gid)
+
+    try:
+        df = pd.read_csv(export_url, dtype=str, keep_default_na=False)
+    except Exception as e:
+        raise RuntimeError(f"Could not read weekly specials sheet: {e}")
+
+    if df.empty:
+        return []
+
+    header = [str(c).strip().lower() for c in df.columns.tolist()]
+    name_col = None
+    store_col = None
+    price_col = None
+
+    for i, h in enumerate(header):
+        if name_col is None and any(k in h for k in ["product", "item", "name", "food"]):
+            name_col = i
+        if store_col is None and any(k in h for k in ["store", "shop"]):
+            store_col = i
+        if price_col is None and any(k in h for k in ["price", "sale", "special"]):
+            price_col = i
+
+    if name_col is None and len(df.columns) > 0:
+        name_col = 0
+    if store_col is None and len(df.columns) > 1:
+        store_col = 1
+    if price_col is None and len(df.columns) > 2:
+        price_col = 2
+
+    if name_col is None or price_col is None:
+        raise ValueError("Weekly specials sheet must contain at least Product Name and Sale Price columns.")
+
+    specials: List[Dict[str, object]] = []
+    for _, row in df.iterrows():
+        name = str(row.iloc[name_col]).strip()
+        price_raw = str(row.iloc[price_col]).strip()
+        if not name or not price_raw:
+            continue
+
+        price_clean = price_raw.replace("$", "").replace("AUD", "").replace(",", "")
+        try:
+            price = float(price_clean)
+        except ValueError:
+            continue
+
+        store = None
+        if store_col is not None:
+            store_raw = str(row.iloc[store_col]).strip()
+            if store_raw in ALL_STORES:
+                store = store_raw
+
+        specials.append({"name": name, "store": store, "price": price})
+
+    return specials
 
 
 def fetch_sheet_items(

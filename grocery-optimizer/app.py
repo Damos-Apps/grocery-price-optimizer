@@ -3,6 +3,11 @@ import sqlite3
 import os
 import sys
 import urllib.parse
+import io
+import csv
+import re
+from difflib import get_close_matches
+from typing import List, Dict, Optional, Tuple
 
 # ------------------------------------------------------------------
 # Imports from the optimizer module
@@ -18,7 +23,8 @@ from optimizer import (
     format_store_lists,
     StoreProduct,
 )
-from sheets import sync_shopping_list_from_sheet
+from sheets import sync_shopping_list_from_sheet, fetch_sheet_items
+from seed import calc_unit_price_per_100
 
 # ------------------------------------------------------------------
 # Retailer "Add to Cart" search URLs
@@ -40,6 +46,193 @@ def _build_add_to_cart_url(store_name: str, item_name: str) -> str:
     if "{item}" in template:
         return template.format(item=encoded_item)
     return template
+
+
+# ------------------------------------------------------------------
+# Fuzzy matching helpers
+# ------------------------------------------------------------------
+_FUZZY_CUTOFF = 0.55
+
+
+def _normalise_name(name: str) -> str:
+    """Lowercase and collapse whitespace for consistent comparison."""
+    return re.sub(r"\s+", " ", str(name).strip().lower())
+
+
+def _fuzzy_find(query: str, candidates: List[str]) -> Optional[str]:
+    """Return the best fuzzy match for query among candidates, or None."""
+    query_norm = _normalise_name(query)
+    if not query_norm or not candidates:
+        return None
+
+    # Exact match short-circuit.
+    for c in candidates:
+        if _normalise_name(c) == query_norm:
+            return c
+
+    # Substring match short-circuit.
+    for c in candidates:
+        if query_norm in _normalise_name(c) or _normalise_name(c) in query_norm:
+            return c
+
+    # Difflib fuzzy match.
+    matches = get_close_matches(query_norm, [_normalise_name(c) for c in candidates], n=1, cutoff=_FUZZY_CUTOFF)
+    if matches:
+        match_norm = matches[0]
+        for c in candidates:
+            if _normalise_name(c) == match_norm:
+                return c
+    return None
+
+
+# ------------------------------------------------------------------
+# Weekly specials helpers
+# ------------------------------------------------------------------
+def _load_weekly_specials_from_csv(uploaded_file) -> List[Dict[str, object]]:
+    """Parse a CSV file containing weekly specials (Product, Store, Sale Price)."""
+    specials: List[Dict[str, object]] = []
+    if uploaded_file is None:
+        return specials
+
+    try:
+        text = uploaded_file.getvalue().decode("utf-8")
+        reader = csv.reader(io.StringIO(text))
+        rows = list(reader)
+    except Exception as e:
+        st.error(f"Could not read CSV: {e}")
+        return specials
+
+    if not rows:
+        return specials
+
+    header = [str(c).strip().lower() for c in rows[0]]
+    data_rows = rows[1:]
+
+    name_col = None
+    store_col = None
+    price_col = None
+
+    for i, h in enumerate(header):
+        if name_col is None and any(k in h for k in ["product", "item", "name", "food"]):
+            name_col = i
+        if store_col is None and any(k in h for k in ["store", "shop"]):
+            store_col = i
+        if price_col is None and any(k in h for k in ["price", "sale", "special"]):
+            price_col = i
+
+    if name_col is None and len(header) > 0:
+        name_col = 0
+    if store_col is None and len(header) > 1:
+        store_col = 1
+    if price_col is None and len(header) > 2:
+        price_col = 2
+
+    if name_col is None or price_col is None:
+        st.error("CSV must contain at least Product Name and Sale Price columns.")
+        return specials
+
+    for row in data_rows:
+        if len(row) <= max(name_col, price_col):
+            continue
+        name = str(row[name_col]).strip()
+        price_raw = str(row[price_col]).strip()
+        if not name or not price_raw:
+            continue
+
+        price_clean = price_raw.replace("$", "").replace("AUD", "").replace(",", "")
+        try:
+            price = float(price_clean)
+        except ValueError:
+            continue
+
+        store = None
+        if store_col is not None and store_col < len(row):
+            store_raw = str(row[store_col]).strip()
+            if store_raw in ALL_STORES:
+                store = store_raw
+
+        specials.append({"name": name, "store": store, "price": price})
+
+    return specials
+
+
+def _load_weekly_specials_from_sheet(sheet_url: str, sheet_name: str = "Weekly_Specials") -> List[Dict[str, object]]:
+    """Fetch weekly specials from a Google Sheet tab."""
+    from sheets import fetch_weekly_specials as _fetch_weekly_specials
+    try:
+        return _fetch_weekly_specials(sheet_url, sheet_name=sheet_name)
+    except Exception as e:
+        st.error(f"Could not load weekly specials sheet: {e}")
+        return []
+
+
+def _match_weekly_specials_to_products(
+    conn, specials: List[Dict[str, object]]
+) -> Dict[Tuple[int, str], float]:
+    """
+    Map weekly special names to master products using fuzzy matching.
+    Returns a dict keyed by (master_product_id, store_name) -> sale price.
+    """
+    if not specials:
+        return {}
+
+    cur = conn.cursor()
+    cur.execute("SELECT id, name FROM master_products")
+    master_map = {name: mid for mid, name in cur.fetchall()}
+
+    overrides: Dict[Tuple[int, str], float] = {}
+    for special in specials:
+        best_name = _fuzzy_find(special["name"], list(master_map.keys()))
+        if not best_name:
+            continue
+        master_id = master_map[best_name]
+        store = special.get("store")
+        if store is None or store not in ALL_STORES:
+            # Apply to all stores if no store is specified.
+            for s in ALL_STORES:
+                overrides[(master_id, s)] = special["price"]
+        else:
+            overrides[(master_id, store)] = special["price"]
+
+    return overrides
+
+
+def _apply_weekly_special_overrides(
+    store_products_map: Dict[int, List[StoreProduct]],
+    overrides: Dict[Tuple[int, str], float],
+) -> Dict[int, List[StoreProduct]]:
+    """
+    Return a new store_products_map with weekly-special prices applied.
+    Unit prices are recalculated from the package size so size comparisons stay fair.
+    """
+    if not overrides:
+        return store_products_map
+
+    new_map: Dict[int, List[StoreProduct]] = {}
+    for master_id, products in store_products_map.items():
+        new_products = []
+        for p in products:
+            override_price = overrides.get((master_id, p.store_name))
+            if override_price is not None:
+                new_unit_price = calc_unit_price_per_100(override_price, p.package_size)
+                new_products.append(
+                    StoreProduct(
+                        id=p.id,
+                        store_name=p.store_name,
+                        product_name=p.product_name,
+                        brand_tier=p.brand_tier,
+                        price=override_price,
+                        is_on_special=True,
+                        package_size=p.package_size,
+                        unit_type=p.unit_type,
+                        unit_price_per_100=new_unit_price,
+                        deep_link_url=p.deep_link_url,
+                    )
+                )
+            else:
+                new_products.append(p)
+        new_map[master_id] = new_products
+    return new_map
 
 
 # ------------------------------------------------------------------
@@ -498,6 +691,53 @@ if st.sidebar.button("Sync Shopping List", use_container_width=True, type="secon
 st.sidebar.markdown("---")
 
 # ------------------------------------------------------------------
+# Weekly Catalogue Upload
+# ------------------------------------------------------------------
+st.sidebar.markdown("### Weekly Catalogue Upload")
+
+weekly_specials_sheet_name = st.sidebar.text_input("Weekly specials sheet name", value="Weekly_Specials")
+
+uploaded_specials_csv = st.sidebar.file_uploader(
+    "Upload weekly specials CSV (Product, Store, Sale Price)",
+    type=["csv"],
+    key="weekly_specials_csv",
+)
+
+if st.sidebar.button("Load Weekly Specials", use_container_width=True, type="secondary"):
+    csv_specials = _load_weekly_specials_from_csv(uploaded_specials_csv)
+    sheet_specials = []
+    if google_sheet_url.strip():
+        try:
+            sheet_specials = _load_weekly_specials_from_sheet(
+                google_sheet_url, sheet_name=weekly_specials_sheet_name
+            )
+        except Exception as e:
+            st.sidebar.error(f"Weekly sheet failed: {e}")
+
+    combined = csv_specials + sheet_specials
+    if not combined:
+        st.sidebar.warning("No weekly specials found in the uploaded CSV or sheet.")
+    else:
+        st.session_state["weekly_specials"] = combined
+        st.sidebar.success(f"Loaded {len(combined)} weekly special(s).")
+        st.cache_data.clear()
+        st.rerun()
+
+if st.sidebar.button("Clear Weekly Specials", use_container_width=True, type="secondary"):
+    st.session_state.pop("weekly_specials", None)
+    st.sidebar.success("Weekly specials cleared.")
+    st.cache_data.clear()
+    st.rerun()
+
+if st.session_state.get("weekly_specials"):
+    st.sidebar.markdown(
+        f"<small>{len(st.session_state['weekly_specials'])} special(s) active</small>",
+        unsafe_allow_html=True,
+    )
+
+st.sidebar.markdown("---")
+
+# ------------------------------------------------------------------
 # Main page
 # ------------------------------------------------------------------
 st.title("Australian Grocery Price Optimizer")
@@ -518,6 +758,12 @@ for item in shopping_list:
     store_products_map[item.master_product_id] = load_store_products(
         conn, item.master_product_id, active_stores
     )
+
+# Apply weekly-special overrides if any are active
+weekly_specials = st.session_state.get("weekly_specials", [])
+if weekly_specials:
+    overrides = _match_weekly_specials_to_products(conn, weekly_specials)
+    store_products_map = _apply_weekly_special_overrides(store_products_map, overrides)
 
 available_items = [item for item in shopping_list if store_products_map[item.master_product_id]]
 unavailable = [item for item in shopping_list if not store_products_map[item.master_product_id]]
@@ -710,11 +956,20 @@ with tab2:
         }
         allowed = filter_map.get(store_filter, ALL_STORES)
 
+        # Start with exact/substring matches, then add fuzzy matches so slightly
+        # different name formats still surface relevant products.
+        candidate_products = [p for p in all_products if p[1] in allowed]
+
         filtered = [
-            p for p in all_products
+            p for p in candidate_products
             if (search_lower in p[0].lower() or search_lower in p[2].lower())
-            and p[1] in allowed
         ]
+
+        if not filtered:
+            master_names = list({p[0] for p in candidate_products})
+            best_match = _fuzzy_find(search_query, master_names)
+            if best_match:
+                filtered = [p for p in candidate_products if p[0] == best_match]
 
         if filtered:
             grouped = {}
