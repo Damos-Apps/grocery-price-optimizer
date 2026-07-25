@@ -235,6 +235,21 @@ def _apply_weekly_special_overrides(
     return new_map
 
 
+def _dual_recommendations(products: List[StoreProduct]) -> Dict[str, object]:
+    """
+    Return the cheapest-upfront and best-long-term-value products from a list.
+    These can differ when package sizes vary across stores.
+    """
+    if not products:
+        return {"cheapest_upfront": None, "best_long_term_value": None}
+    cheapest = min(products, key=lambda p: p.price)
+    best_value = min(products, key=lambda p: p.unit_price_per_100)
+    return {
+        "cheapest_upfront": cheapest,
+        "best_long_term_value": best_value,
+    }
+
+
 # ------------------------------------------------------------------
 # Page configuration
 # ------------------------------------------------------------------
@@ -921,6 +936,37 @@ with tab1:
     st.markdown("---")
     st.markdown(f"### Grand Total: **${display_total:.2f}**  ·  {mode_label} mode")
 
+    # ------------------------------------------------------------------
+    # Dual recommendations: cheapest upfront vs best long-term value
+    # ------------------------------------------------------------------
+    dual_items = []
+    for item in available_items:
+        products = store_products_map[item.master_product_id]
+        if not products:
+            continue
+        recs = _dual_recommendations(products)
+        if (
+            recs["cheapest_upfront"]
+            and recs["best_long_term_value"]
+            and recs["cheapest_upfront"].store_name != recs["best_long_term_value"].store_name
+        ):
+            dual_items.append((item, recs["cheapest_upfront"], recs["best_long_term_value"]))
+
+    if dual_items:
+        st.markdown("---")
+        st.markdown("### Dual Recommendations: Cheapest Upfront vs Best Long-Term Value")
+        st.markdown("When package sizes differ across stores, the lowest out-of-pocket price and the lowest unit cost may not be the same store.")
+        for item, upfront, best_value in dual_items:
+            st.markdown(f"""
+                <div style="background:#f8f9fa;border:1px solid #e9ecef;border-left:4px solid #0073e6;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
+                    <strong>{item.name}</strong><br>
+                    <span style="color:#28a745;font-weight:600;">Cheapest upfront:</span>
+                    {upfront.product_name} at {upfront.store_name} — ${upfront.price:.2f} ({upfront.package_size:.0f}{upfront.unit_type})<br>
+                    <span style="color:#0073e6;font-weight:600;">Best long-term value:</span>
+                    {best_value.product_name} at {best_value.store_name} — ${best_value.price:.2f} (${best_value.unit_price_per_100:.4f}/100{best_value.unit_type})
+                </div>
+            """, unsafe_allow_html=True)
+
 # ------------------------------------------------------------------
 # Tab 2: Quick Price Check (Interactive Search Engine)
 # ------------------------------------------------------------------
@@ -1004,10 +1050,30 @@ with tab2:
                     hide_index=True,
                 )
 
-                st.markdown(
-                    f"**Best value:** {cheapest[2]} at **{cheapest[1]}** — "
-                    f"${cheapest[3]:.2f} (${cheapest[7]:.4f}/100{cheapest[6]})"
-                )
+                # Dual recommendation: cheapest upfront vs best long-term value.
+                recs = _dual_recommendations([
+                    StoreProduct(
+                        id=0, store_name=p[1], product_name=p[2], brand_tier="",
+                        price=p[3], is_on_special=p[4], package_size=p[5],
+                        unit_type=p[6], unit_price_per_100=p[7], deep_link_url=p[8],
+                    )
+                    for p in products
+                ])
+                cheapest_upfront = recs["cheapest_upfront"]
+                best_value = recs["best_long_term_value"]
+
+                if cheapest_upfront and best_value and cheapest_upfront.product_name != best_value.product_name:
+                    st.markdown(
+                        f"**Cheapest upfront:** {cheapest_upfront.product_name} at **{cheapest_upfront.store_name}** — "
+                        f"${cheapest_upfront.price:.2f} ({cheapest_upfront.package_size:.0f}{cheapest_upfront.unit_type})  |  "
+                        f"**Best long-term value:** {best_value.product_name} at **{best_value.store_name}** — "
+                        f"${best_value.price:.2f} (${best_value.unit_price_per_100:.4f}/100{best_value.unit_type})"
+                    )
+                elif best_value:
+                    st.markdown(
+                        f"**Best value:** {best_value.product_name} at **{best_value.store_name}** — "
+                        f"${best_value.price:.2f} (${best_value.unit_price_per_100:.4f}/100{best_value.unit_type})"
+                    )
         else:
             # Local database fallback: dynamic live search buttons.
             st.warning(f"'{search_query}' is not in our local database yet.")
