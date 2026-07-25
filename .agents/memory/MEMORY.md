@@ -1,0 +1,1 @@
+- [Weekly specials override strategy](weekly-specials-overrides.md) — dynamic prices are applied in-memory, not written to the baseline database.
